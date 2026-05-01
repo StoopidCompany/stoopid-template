@@ -232,7 +232,7 @@ reasonable choice; consult the project's `README.md` for specifics.
 
 The exact layout varies by project, but common top-level directories include:
 
-```
+```sh
 <repo>/
 ├── .github/             # CI workflows, issue/PR templates, Dependabot config
 ├── .vscode/             # Shared editor settings and extension recommendations
@@ -283,12 +283,14 @@ A CI check (commitlint) verifies every commit on every pull request.
 
 ### Format
 
-```
-<type>(<scope>)<!>: <subject>
-
-<body>
-
-<footer>
+```html
+<type
+  >(<scope
+    >)<!>:
+    <subject>
+      <body>
+        <footer></footer></body></subject></scope
+></type>
 ```
 
 - `<type>` — one of: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
@@ -300,7 +302,7 @@ A CI check (commitlint) verifies every commit on every pull request.
 
 ### Examples
 
-```
+```sh
 feat(auth): add refresh token rotation
 
 fix: handle null user agent in request logger

@@ -15,6 +15,7 @@ HAS_RUST   := $(shell test -f Cargo.toml && echo 1)
 HAS_TF     := $(shell find . -maxdepth 3 -name '*.tf' -not -path './.terraform/*' -print -quit 2>/dev/null)
 HAS_DOCKER := $(shell test -f Dockerfile -o -f docker-compose.yml -o -f compose.yml && echo 1)
 HAS_TILT   := $(shell test -f Tiltfile && echo 1)
+HAS_TOOLVERSIONS := $(shell test -f .tool-versions && echo 1)
 
 # Pick the JS package manager: pnpm preferred, fall back to npm
 ifdef HAS_PNPM
@@ -63,6 +64,19 @@ endif
 	@echo "==> Installing pre-commit hooks..."
 	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || echo "pre-commit not installed; skipping"
 	@echo "==> Bootstrap complete."
+ifdef HAS_TOOLVERSIONS
+	@if command -v mise >/dev/null 2>&1; then \
+		echo "==> Installing tool versions (mise)..."; \
+		mise install; \
+	elif command -v asdf >/dev/null 2>&1; then \
+		echo "==> Installing tool versions (asdf)..."; \
+		asdf install; \
+	else \
+		echo "==> .tool-versions present but neither mise nor asdf is installed."; \
+		echo "    Install mise (https://mise.jdx.dev) for automatic version management,"; \
+		echo "    or ensure your local toolchain matches the versions in .tool-versions."; \
+	fi
+endif
 
 .PHONY: install
 install: bootstrap ## Alias for bootstrap
@@ -401,3 +415,4 @@ detect: ## Show what languages and tools are detected
 	@echo "Terraform (*.tf):            $(if $(HAS_TF),yes,no)"
 	@echo "Docker (Dockerfile/compose): $(if $(HAS_DOCKER),yes,no)"
 	@echo "Tilt (Tiltfile):             $(if $(HAS_TILT),yes,no)"
+	@echo "Tool versions (.tool-versions): $(if $(HAS_TOOLVERSIONS),yes,no)"

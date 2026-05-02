@@ -173,18 +173,24 @@ Install the toolchain for whichever languages this project uses:
 - **Git** — current version
 - **Make** — for the standard task runner
 - **Docker** — for containerized builds and local services
+- **mise** _(recommended)_ — manages language runtime versions per project via
+  [`.tool-versions`](https://mise.jdx.dev/configuration.html#tool-versions).
+  Install with `brew install mise` or `curl https://mise.run | sh`. After
+  installation, run `mise install` from the repo root to install the exact
+  versions this project requires. [`asdf`](https://asdf-vm.com) is a
+  supported alternative; both read the same file.
 - **pre-commit** — for git hooks (`pip install pre-commit` or `brew install pre-commit`)
-- **Node.js** + **pnpm** — if the project includes TypeScript/JavaScript
-- **Python** + **uv** — if the project includes Python
-- **Rust** + **cargo** — if the project includes Rust
-- **Terraform** — if the project includes infrastructure code
+- **Node.js** + **pnpm** — if the project includes TypeScript/JavaScript _(installed automatically by mise)_
+- **Python** + **uv** — if the project includes Python _(Python installed automatically by mise; install uv via `pip install uv` or `brew install uv`)_
+- **Rust** + **cargo** — if the project includes Rust _(installed automatically by mise)_
+- **Terraform** — if the project includes infrastructure code _(installed automatically by mise)_
 
-Project-specific tool versions are pinned in:
-
-- `.tool-versions` (asdf / mise) if present
-- `package.json` `engines` field for Node
-- `pyproject.toml` `requires-python` for Python
-- `rust-toolchain.toml` for Rust
+The source of truth for tool versions is **`.tool-versions`** at the repo
+root. Run `mise install` to align your local environment with the versions
+this project requires. Language-specific manifests
+(`package.json` `engines`, `pyproject.toml` `requires-python`,
+`rust-toolchain.toml`) should align with `.tool-versions` and are kept in
+sync as part of any version bump.
 
 ### Bootstrap
 
@@ -232,7 +238,7 @@ reasonable choice; consult the project's `README.md` for specifics.
 
 The exact layout varies by project, but common top-level directories include:
 
-```
+```sh
 <repo>/
 ├── .github/             # CI workflows, issue/PR templates, Dependabot config
 ├── .vscode/             # Shared editor settings and extension recommendations
@@ -283,12 +289,14 @@ A CI check (commitlint) verifies every commit on every pull request.
 
 ### Format
 
-```
-<type>(<scope>)<!>: <subject>
-
-<body>
-
-<footer>
+```html
+<type
+  >(<scope
+    >)<!>:
+    <subject>
+      <body>
+        <footer></footer></body></subject></scope
+></type>
 ```
 
 - `<type>` — one of: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
@@ -300,7 +308,7 @@ A CI check (commitlint) verifies every commit on every pull request.
 
 ### Examples
 
-```
+```sh
 feat(auth): add refresh token rotation
 
 fix: handle null user agent in request logger

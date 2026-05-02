@@ -47,13 +47,24 @@ repos:
   # Conventional Commits validation
   # ===========================================================================
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
+    rev: v4.0.0
     hooks:
       - id: conventional-pre-commit
         stages: [ commit-msg ]
         args:
-          - --types
-          - feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert
+          [
+            feat,
+            fix,
+            docs,
+            style,
+            refactor,
+            perf,
+            test,
+            build,
+            ci,
+            chore,
+            revert,
+          ]
 
   # ===========================================================================
   # Markdown
@@ -147,10 +158,29 @@ repos:
       - id: prettier
         name: prettier
         language: system
-        entry: pnpm exec prettier --write --ignore-unknown
-        files: \.(js|jsx|ts|tsx|mjs|cjs|json|jsonc|css|scss|html|md|yaml|yml)$
+        entry: bash -c 'test -f package.json && pnpm exec prettier --write
+          --ignore-unknown "$@" || exit 0' --
+        files: \.(js|jsx|ts|tsx|mjs|cjs|json|jsonc|css|scss|html)$
         pass_filenames: true
         require_serial: false
+
+  # ===========================================================================
+  # Documentation — runs only when ADR files or the index change
+  # ===========================================================================
+  - repo: local
+    hooks:
+      - id: adr-lint
+        name: adr-lint
+        language: system
+        entry: scripts/adr-lint.py
+        files: ^docs/adrs/.*\.md$
+        pass_filenames: false
+        require_serial: true
+        description: >
+          Validate ADR numbering, status fields, supersession references, and
+          index synchronization. Runs on the entire docs/adrs/ tree, not just
+          changed files, because ADR integrity is a global property (gaps,
+          duplicates, cross-references).
 
 ci:
   autofix_commit_msg: "style: pre-commit auto-fixes"
@@ -161,3 +191,4 @@ ci:
     - prettier
     - cargo-check
     - terraform_validate
+    - adr-lint

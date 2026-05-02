@@ -15,6 +15,7 @@ HAS_RUST   := $(shell test -f Cargo.toml && echo 1)
 HAS_TF     := $(shell find . -maxdepth 3 -name '*.tf' -not -path './.terraform/*' -print -quit 2>/dev/null)
 HAS_DOCKER := $(shell test -f Dockerfile -o -f docker-compose.yml -o -f compose.yml && echo 1)
 HAS_TILT   := $(shell test -f Tiltfile && echo 1)
+HAS_TOOLVERSIONS := $(shell test -f .tool-versions && echo 1)
 
 # Pick the JS package manager: pnpm preferred, fall back to npm
 ifdef HAS_PNPM
@@ -63,6 +64,19 @@ endif
 	@echo "==> Installing pre-commit hooks..."
 	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || echo "pre-commit not installed; skipping"
 	@echo "==> Bootstrap complete."
+ifdef HAS_TOOLVERSIONS
+	@if command -v mise >/dev/null 2>&1; then \
+		echo "==> Installing tool versions (mise)..."; \
+		mise install; \
+	elif command -v asdf >/dev/null 2>&1; then \
+		echo "==> Installing tool versions (asdf)..."; \
+		asdf install; \
+	else \
+		echo "==> .tool-versions present but neither mise nor asdf is installed."; \
+		echo "    Install mise (https://mise.jdx.dev) for automatic version management,"; \
+		echo "    or ensure your local toolchain matches the versions in .tool-versions."; \
+	fi
+endif
 
 .PHONY: install
 install: bootstrap ## Alias for bootstrap
@@ -220,6 +234,151 @@ docker-push: ## Push Docker image
 	@docker push $(IMAGE):latest
 
 # =============================================================================
+##@ Documentation
+# =============================================================================
+
+ADR_DIR     := docs/adrs
+RUNBOOK_DIR := docs/runbooks
+
+.PHONY: adr
+adr: ## Create a new ADR (usage: make adr TITLE="Use Postgres")
+	@if [ -z "$(TITLE)" ]; then \
+		echo "ERROR: TITLE is required. Usage: make adr TITLE=\"Your decision title\""; \
+		exit 1; \
+	fi
+	@if [ ! -f $(ADR_DIR)/template.md ]; then \
+		echo "ERROR: $(ADR_DIR)/template.md not found."; \
+		exit 1; \
+	fi
+	@next=$$(ls $(ADR_DIR) 2>/dev/null | grep -E '^[0-9]{4}-' | sort | tail -1 | grep -oE '^[0-9]{4}' || echo "0000"); \
+	num=$$(printf "%04d" $$((10#$$next + 1))); \
+	slug=$$(echo "$(TITLE)" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$$//'); \
+	file="$(ADR_DIR)/$$num-$$slug.md"; \
+	today=$$(date +%Y-%m-%d); \
+	sed -e "s/ADR-NNNN: <short title of the decision>/ADR-$$num: $(TITLE)/" \
+	    -e "s/<YYYY-MM-DD>/$$today/" \
+	    $(ADR_DIR)/template.md > "$$file"; \
+	echo "Created $$file"; \
+	echo "Edit it, then add to the ADR index in $(ADR_DIR)/README.md"
+
+.PHONY: runbook
+runbook: ## Create a new runbook (usage: make runbook TITLE="Restore from backup")
+	@if [ -z "$(TITLE)" ]; then \
+		echo "ERROR: TITLE is required. Usage: make runbook TITLE=\"Your runbook title\""; \
+		exit 1; \
+	fi
+	@if [ ! -f $(RUNBOOK_DIR)/template.md ]; then \
+		echo "ERROR: $(RUNBOOK_DIR)/template.md not found."; \
+		exit 1; \
+	fi
+	@slug=$$(echo "$(TITLE)" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$$//'); \
+	file="$(RUNBOOK_DIR)/$$slug.md"; \
+	if [ -e "$$file" ]; then \
+		echo "ERROR: $$file already exists."; \
+		exit 1; \
+	fi; \
+	today=$$(date +%Y-%m-%d); \
+	sed -e "s/<short title — what this runbook is for>/$(TITLE)/" \
+	    -e "s/<YYYY-MM-DD>/$$today/" \
+	    $(RUNBOOK_DIR)/template.md > "$$file"; \
+	echo "Created $$file"; \
+	echo "Edit it, then add to the runbook index in $(RUNBOOK_DIR)/README.md"
+
+.PHONY: docs-check
+docs-check: ## Verify docs structure exists and templates are present
+	@missing=0; \
+	for f in docs/README.md $(ADR_DIR)/README.md $(ADR_DIR)/template.md $(RUNBOOK_DIR)/README.md $(RUNBOOK_DIR)/template.md; do \
+		if [ ! -f "$$f" ]; then \
+			echo "MISSING: $$f"; \
+			missing=1; \
+		fi; \
+	done; \
+	if [ $$missing -eq 0 ]; then \
+		echo "==> Docs structure is complete."; \
+	else \
+		exit 1; \
+	fi
+
+.PHONY: adr-lint
+adr-lint: ## Validate ADR integrity (numbering, status, supersession, index)
+	@scripts/adr-lint.py --adr-dir $(ADR_DIR)
+
+.PHONY: adr-lint-strict
+adr-lint-strict: ## Validate ADRs with warnings promoted to errors (CI-equivalent)
+	@scripts/adr-lint.py --adr-dir $(ADR_DIR) --strict
+
+# =============================================================================
+##@ Git
+# =============================================================================
+
+.PHONY: commit
+commit: ## Stage changes (with confirmation), commit, and push
+	@if git diff --quiet && git diff --staged --quiet && [ -z "$$(git ls-files --others --exclude-standard)" ]; then \
+		echo "Nothing to commit. Working tree is clean."; \
+		exit 0; \
+	fi; \
+	echo "==> Pending changes:"; \
+	git status --short; \
+	echo ""; \
+	echo "==> Diff stat:"; \
+	git diff --stat HEAD; \
+	echo ""; \
+	printf "Stage all changes (including untracked) and commit? [y/N] "; \
+	read confirm; \
+	case "$$confirm" in \
+		y|Y|yes|YES) ;; \
+		*) echo "Aborted."; exit 1 ;; \
+	esac; \
+	git add -A; \
+	if command -v cz >/dev/null 2>&1; then \
+		echo "==> Using commitizen (cz commit)"; \
+		cz commit || exit 1; \
+	elif command -v git-cz >/dev/null 2>&1; then \
+		echo "==> Using commitizen (git cz)"; \
+		git cz || exit 1; \
+	else \
+		echo "==> commitizen not found; opening git commit editor"; \
+		echo "    (conventional-pre-commit hook will validate the message)"; \
+		git commit || exit 1; \
+	fi
+	@if [ -z "$(NO_PUSH)" ]; then \
+		$(MAKE) --no-print-directory push; \
+	else \
+		echo "==> NO_PUSH set; skipping push. Run 'make push' when ready."; \
+	fi
+
+.PHONY: push
+push: ## Push current branch with safety checks
+	@branch=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$branch" = "HEAD" ]; then \
+		echo "ERROR: detached HEAD state. Check out a branch before pushing."; \
+		exit 1; \
+	fi; \
+	echo "==> Fetching origin/$$branch..."; \
+	git fetch origin "$$branch" 2>/dev/null || true; \
+	if [ "$$branch" = "main" ]; then \
+		if git rev-parse --verify --quiet origin/main >/dev/null; then \
+			local_sha=$$(git rev-parse main); \
+			remote_sha=$$(git rev-parse origin/main); \
+			base_sha=$$(git merge-base main origin/main); \
+			if [ "$$local_sha" != "$$remote_sha" ]; then \
+				if [ "$$base_sha" = "$$local_sha" ]; then \
+					echo "ERROR: local main is behind origin/main."; \
+					echo "       Run 'git pull --ff-only' before pushing."; \
+					exit 1; \
+				elif [ "$$base_sha" != "$$remote_sha" ]; then \
+					echo "ERROR: local main has diverged from origin/main."; \
+					echo "       Local has commits origin/main does not, AND vice versa."; \
+					echo "       Resolve before pushing."; \
+					exit 1; \
+				fi; \
+			fi; \
+		fi; \
+	fi; \
+	echo "==> Pushing $$branch to origin..."; \
+	git push --set-upstream origin "$$branch"
+
+# =============================================================================
 ##@ Cleanup
 # =============================================================================
 
@@ -256,3 +415,4 @@ detect: ## Show what languages and tools are detected
 	@echo "Terraform (*.tf):            $(if $(HAS_TF),yes,no)"
 	@echo "Docker (Dockerfile/compose): $(if $(HAS_DOCKER),yes,no)"
 	@echo "Tilt (Tiltfile):             $(if $(HAS_TILT),yes,no)"
+	@echo "Tool versions (.tool-versions): $(if $(HAS_TOOLVERSIONS),yes,no)"

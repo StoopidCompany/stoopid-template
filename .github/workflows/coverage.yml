@@ -130,7 +130,7 @@ jobs:
 
       - name: Comment coverage report on PR
         if: github.event_name == 'pull_request' && always()
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: coverage-python
           path: diff-cover-python.md
@@ -199,7 +199,7 @@ jobs:
 
       - name: Comment coverage report on PR
         if: github.event_name == 'pull_request' && always()
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: coverage-typescript
           path: diff-cover-typescript.md
@@ -263,7 +263,7 @@ jobs:
 
       - name: Comment coverage report on PR
         if: github.event_name == 'pull_request' && always()
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           header: coverage-rust
           path: diff-cover-rust.md
